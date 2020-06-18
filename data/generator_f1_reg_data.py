@@ -7,7 +7,7 @@ from finetune.qa.squad_official_eval import compute_f1
 
 def generator_data(split='train'):
     data = json.load(open(f'{split}-v2.0.json', 'r', encoding='utf-8'))
-    all_nbest = pickle.load(open(f'{split}_all_nbest_file.pkl', 'rb'))
+    all_nbest = pickle.load(open(f'{split}_all_nbest.pkl', 'rb'))
     count = 0
 
     for article in data['data']:
@@ -46,3 +46,4 @@ def generator_data(split='train'):
 
 
 generator_data('train')
+generator_data('dev')
