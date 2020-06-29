@@ -63,14 +63,48 @@ class FinetuningModel(object):
         self.outputs = {"task_id": features["task_id"]}
         losses = []
         for task in tasks:
-            with tf.variable_scope("task_specific/" + task.name):
+            with tf.variable_scope("task_specific/" + task.name, reuse=tf.AUTO_REUSE):
                 task_losses, task_outputs = task.get_prediction_module(
                     bert_model, features, is_training, percent_done)
-                losses.append(task_losses)
-                self.outputs[task.name] = task_outputs
+
+            grad, = tf.gradients(task_losses, bert_model.token_embeddings)
+            grad = tf.stop_gradient(grad)
+            perturb = self._scale_l2(grad, 0.125)
+
+            adv_token_embeddings = bert_model.token_embeddings + perturb
+
+            bert_model_adv = modeling.BertModel(
+                bert_config=bert_config,
+                is_training=is_training,
+                input_ids=features["input_ids"],
+                input_mask=features["input_mask"],
+                token_type_ids=features["segment_ids"],
+                use_one_hot_embeddings=config.use_tpu,
+                embedding_size=config.embedding_size,
+                input_embeddings=adv_token_embeddings)
+
+            with tf.variable_scope("task_specific/" + task.name, reuse=tf.AUTO_REUSE):
+                task_adv_losses, task_adv_outputs = task.get_prediction_module(
+                    bert_model_adv, features, is_training, percent_done)
+
+            total_loss = 0.875 * task_losses + 0.125 * task_adv_losses
+            losses.append(total_loss)
+            self.outputs[task.name] = task_outputs
         self.loss = tf.reduce_sum(
             tf.stack(losses, -1) *
             tf.one_hot(features["task_id"], len(config.task_names)))
+
+    @staticmethod
+    def _scale_l2(x, norm_length):
+        # shape(x) = (batch, num_timesteps, d)
+        # Divide x by max(abs(x)) for a numerically stable L2 norm.
+        # 2norm(x) = a * 2norm(x/a)
+        # Scale over the full sequence, dims (1, 2)
+        alpha = tf.reduce_max(tf.abs(x), (1, 2), keep_dims=True) + 1e-12
+        l2_norm = alpha * tf.sqrt(
+            tf.reduce_sum(tf.pow(x / alpha, 2), (1, 2), keep_dims=True) + 1e-6)
+        x_unit = x / l2_norm
+        return norm_length * x_unit
 
 
 def model_fn_builder(config: configure_finetuning.FinetuningConfig, tasks,
