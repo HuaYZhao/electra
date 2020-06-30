@@ -219,7 +219,7 @@ class BertModel(object):
         if not update_embeddings:
             self.embedding_output = tf.stop_gradient(self.embedding_output)
 
-        with tf.variable_scope(scope, default_name="electra"):
+        with tf.variable_scope(scope if untied_embeddings else "electra", reuse=tf.AUTO_REUSE):
             if self.embedding_output.shape[-1] != bert_config.hidden_size:
                 self.embedding_output = tf.layers.dense(
                     self.embedding_output, bert_config.hidden_size,
