@@ -46,6 +46,7 @@ class QAExample(task.Example):
                  question_text,
                  doc_tokens,
                  f1_score,
+                 answer_recall,
                  orig_answer_text=None,
                  start_position=None,
                  end_position=None,
@@ -61,6 +62,7 @@ class QAExample(task.Example):
         self.end_position = end_position
         self.is_impossible = is_impossible
         self.f1_score = f1_score
+        self.answer_recall = answer_recall
 
     def __str__(self):
         return self.__repr__()
@@ -192,6 +194,7 @@ class QATask(task.Task):
                 char_to_word_offset.append(len(doc_tokens) - 1)
 
             f1_score = qa["f1_score"]
+            answer_recall = qa["answer_recall"]
             start_position = None
             end_position = None
             orig_answer_text = None
@@ -250,13 +253,15 @@ class QATask(task.Task):
                 start_position=start_position,
                 end_position=end_position,
                 is_impossible=is_impossible,
-                f1_score=f1_score)
+                f1_score=f1_score,
+                answer_recall=answer_recall)
             examples.append(example)
 
     def get_feature_specs(self):
         return [
             feature_spec.FeatureSpec(self.name + "_eid", []),
             feature_spec.FeatureSpec(self.name + "_f1_score", [], is_int_feature=False),
+            feature_spec.FeatureSpec(self.name + "_answer_recall", []),
         ]
 
     def featurize(self, example: QAExample, is_training, log=False,
@@ -410,10 +415,12 @@ class QATask(task.Task):
                     self.name + "_token_to_orig_map": token_to_orig_map,
                     self.name + "_token_is_max_context": token_is_max_context,
                     self.name + "_f1_score": example.f1_score,
+                    self.name + "_answer_recall": example.answer_recall,
                 })
             if is_training:
                 features.update({
-                    self.name + "_f1_score": example.f1_score
+                    self.name + "_f1_score": example.f1_score,
+                    self.name + "_answer_recall": example.answer_recall,
                 })
             all_features.append(features)
         return all_features
@@ -421,18 +428,17 @@ class QATask(task.Task):
     def get_prediction_module(self, bert_model, features, is_training,
                               percent_done):
         reprs = bert_model.get_pooled_output()
-        if is_training:
-            reprs = tf.nn.dropout(reprs, keep_prob=0.9)
+        # if is_training:
+        #     reprs = tf.nn.dropout(reprs, keep_prob=0.9)
+        predictions = tf.squeeze(tf.layers.dense(reprs, 1), -1)
 
-        predictions = tf.layers.dense(reprs, 1)
-        predictions = tf.squeeze(predictions, -1)
-
-        targets = features[self.name + "_f1_score"]
-        losses = tf.square(predictions - targets)
+        losses = tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=tf.cast(features[self.name + "_answer_recall"], tf.float32),
+            logits=predictions)
         outputs = dict(
             loss=losses,
             predictions=predictions,
-            targets=features[self.name + "_f1_score"],
+            targets=features[self.name + "_answer_recall"],
             eid=features[self.name + "_eid"]
         )
 

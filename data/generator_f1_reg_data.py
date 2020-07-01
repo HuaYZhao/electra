@@ -14,6 +14,7 @@ def generator_data(split='train'):
         for p in article['paragraphs']:
             del p['context']
             new_qas = []
+
             for qa in p['qas']:
                 qid = qa['id']
                 gold_answers = qa['answers']
@@ -23,6 +24,7 @@ def generator_data(split='train'):
 
                 most_text = nbest[0]['text']
                 new_qa = []
+                max_f1 = 0.
                 for i, nb in enumerate(nbest):
                     pred = nb['text']
                     if split == 'train':
@@ -35,7 +37,10 @@ def generator_data(split='train'):
                                        "pred_answer": pred,
                                        "question": qa['question'],
                                        "id": f"{qid}_{i}"})
+                        max_f1 = max(max_f1, f1)
                 if new_qa[0]["f1_score"] > 0:
+                    for qa in new_qa:
+                        qa['answer_recall'] = 1 if qa['f1_score'] == max_f1 else 0
                     new_qas.extend(new_qa)
             p['qas'] = new_qas
             count += len(new_qas)
