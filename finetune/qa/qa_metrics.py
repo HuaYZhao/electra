@@ -262,9 +262,8 @@ class SpanBasedQAScorer(scorer.Scorer):
 
         utils.write_json(dict(all_predictions),
                          self._config.qa_preds_file(self._name))
+        utils.write_pickle(all_nbest_json, self._config.eval_all_nbest_file)
 
-        import pickle
-        pickle.dump(all_nbest_json, open('all_nbest.pkl', 'wb'))
         if self._v2:
             utils.write_json({
                 k: float(v) for k, v in six.iteritems(scores_diff_json)},
