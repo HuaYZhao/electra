@@ -128,7 +128,7 @@ def model_fn_builder(config: configure_finetuning.FinetuningConfig, tasks,
         scaffold_fn = None
         if init_checkpoint:
             assignment_map, _ = modeling.get_assignment_map_from_checkpoint(
-                tvars, init_checkpoint, prefix="")
+                tvars, init_checkpoint)
             if config.use_tpu:
                 def tpu_scaffold():
                     tf.train.init_from_checkpoint(init_checkpoint, assignment_map)

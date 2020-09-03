@@ -151,7 +151,7 @@ class Preprocessor(object):
             d = tf.data.TFRecordDataset(input_file)
             if is_training:
                 d = d.repeat()
-                d = d.shuffle(buffer_size=100)
+                d = d.shuffle(buffer_size=1000)
             return d.apply(
                 tf.data.experimental.map_and_batch(
                     self._decode_tfrecord,
